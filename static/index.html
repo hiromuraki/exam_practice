@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>练题</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* -----------------------------------------------------------------------
+     Page shell — two-column flex layout
+     Left: main content (flex: 1).  Right: stats sidebar (0 → 380px).
+     The sidebar sits in normal flow — no overlay, no backdrop.
+  ----------------------------------------------------------------------- */
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: #f5f7fa;
+    color: #1a1a2e;
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+  }
+
+  /* ---- left column ---- */
+  .main-column {
+    flex: 1 1 auto;
+    min-width: 0;                /* allow shrink below content size */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px;
+    overflow-y: auto;
+    height: 100vh;
+    position: sticky;
+    top: 0;
+  }
+  .main-column-inner {
+    width: 100%;
+    max-width: 760px;
+  }
+
+  /* ---- right column (sidebar) ---- */
+  .result-sidebar {
+    flex: 0 0 0px;               /* start at 0 width */
+    width: 0;
+    overflow: hidden;
+    background: #fff;
+    border-left: 1px solid #e8e8e8;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    position: sticky;
+    top: 0;
+    transition: flex-basis .35s cubic-bezier(.22,1,.36,1),
+                width     .35s cubic-bezier(.22,1,.36,1);
+  }
+  .result-sidebar.open {
+    flex-basis: 380px;
+    width: 380px;
+    overflow-y: auto;
+  }
+  @media (max-width: 860px) {
+    .result-sidebar.open {
+      flex-basis: 320px;
+      width: 320px;
+    }
+  }
+
+  .sidebar-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 24px 20px 12px; flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .sidebar-header h2 { font-size: 1.3rem; font-weight: 700; color: #16213e; }
+  .sidebar-close {
+    width: 32px; height: 32px; border: none; background: #f0f0f0;
+    border-radius: 50%; cursor: pointer; font-size: 1.1rem;
+    display: flex; align-items: center; justify-content: center;
+    color: #666; flex-shrink: 0; transition: background .15s;
+  }
+  .sidebar-close:hover { background: #e0e0e0; }
+
+  .sidebar-body {
+    flex: 1; overflow-y: auto; padding: 4px 20px 24px;
+  }
+
+  /* ---- shared components ---- */
+  .header { text-align: center; padding: 32px 0 8px; }
+  .header h1 { font-size: 1.8rem; font-weight: 700; color: #16213e; }
+  .header p { color: #555; margin-top: 4px; }
+
+  .start-card {
+    background: #fff; border-radius: 16px; padding: 48px 32px;
+    text-align: center; box-shadow: 0 2px 12px rgba(0,0,0,.06); margin-top: 16px;
+  }
+  .start-card p { color: #666; margin-bottom: 24px; font-size: 0.95rem; }
+
+  .btn-primary {
+    display: inline-block; padding: 14px 48px; font-size: 1.1rem;
+    background: #4361ee; color: #fff; border: none; border-radius: 10px;
+    cursor: pointer; font-weight: 600; transition: background .2s;
+  }
+  .btn-primary:hover { background: #3a56d4; }
+  .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+
+  .btn-secondary {
+    display: inline-block; padding: 12px 32px; font-size: 1rem; background: #fff; color: #4361ee;
+    border: 2px solid #4361ee; border-radius: 10px; cursor: pointer;
+    font-weight: 600; transition: all .2s;
+  }
+  .btn-secondary:hover { background: #eef1ff; }
+
+  /* ---- question cards ---- */
+  .question-card {
+    background: #fff; border-radius: 14px; padding: 24px;
+    margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,.05);
+    transition: box-shadow .2s;
+  }
+  .question-card.correct { box-shadow: 0 0 0 2px #2ecc71; }
+  .question-card.incorrect { box-shadow: 0 0 0 2px #e74c3c; }
+
+  .q-header {
+    display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px;
+    font-size: 1rem; font-weight: 500;
+  }
+  .q-number {
+    background: #4361ee; color: #fff; border-radius: 8px;
+    min-width: 32px; height: 32px; display: flex; align-items: center;
+    justify-content: center; font-size: 0.85rem; font-weight: 700; flex-shrink: 0;
+  }
+  .q-stem { padding-top: 4px; }
+
+  .choices { display: flex; flex-direction: column; gap: 8px; }
+  .choice-label {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; border: 1.5px solid #e0e0e0; border-radius: 10px;
+    cursor: pointer; transition: all .15s; user-select: none;
+    background: #fafafa;
+  }
+  .choice-label:hover { border-color: #4361ee; background: #eef1ff; }
+  .choice-label input { display: none; }
+  .choice-marker {
+    width: 22px; height: 22px; border-radius: 50%; border: 2px solid #aaa;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; transition: all .15s; font-size: 0.75rem; font-weight: 700; color: transparent;
+  }
+  .choice-label input:checked + .choice-marker {
+    background: #4361ee; border-color: #4361ee; color: #fff;
+  }
+  .choice-label input:checked + .choice-marker::after { content: "✓"; }
+  .choice-text { font-size: 0.95rem; color: #333; }
+
+  /* feedback */
+  .feedback { margin-top: 12px; padding: 10px 14px; border-radius: 8px; font-size: 0.9rem; display: none; }
+  .feedback.show { display: block; }
+  .feedback.correct { background: #e8f8f0; color: #1b7a44; }
+  .feedback.incorrect { background: #fde8e8; color: #b91c1c; }
+  .feedback .expected { margin-top: 4px; font-size: 0.85rem; color: #555; }
+
+  /* ---- bottom bar ---- */
+  .submit-bar {
+    position: sticky; bottom: 0; padding: 16px 0;
+    background: linear-gradient(transparent, #f5f7fa 20%);
+    display: flex; justify-content: center; gap: 12px; flex-wrap: wrap;
+  }
+  .submit-bar .btn-submit { padding: 12px 40px; font-size: 1rem; }
+
+  /* ---- sidebar contents ---- */
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+  .stat-box { background: #f5f7fa; border-radius: 12px; padding: 14px 6px; text-align: center; }
+  .stat-box .num { font-size: 1.7rem; font-weight: 700; color: #16213e; }
+  .stat-box .label { font-size: 0.78rem; color: #888; margin-top: 2px; }
+  .stat-box.highlight .num { color: #2ecc71; }
+
+  .sidebar-section-title {
+    font-size: 0.8rem; font-weight: 600; color: #999;
+    margin-bottom: 6px; text-transform: uppercase; letter-spacing: .5px;
+  }
+  .detail-list { margin-bottom: 16px; }
+  .detail-item { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid #f2f2f2; font-size: 0.88rem; }
+  .detail-item .icon { font-size: 1.05rem; flex-shrink: 0; }
+  .detail-item .q-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .sidebar-actions { display: flex; flex-direction: column; gap: 8px; padding-top: 4px; }
+
+  /* ---- util ---- */
+  .hidden { display: none !important; }
+  .tag {
+    display: inline-block; font-size: 0.72rem; padding: 2px 8px; border-radius: 20px;
+    margin-left: 8px; font-weight: 500; white-space: nowrap;
+  }
+  .tag-single { background: #e8f0fe; color: #1967d2; }
+  .tag-multi  { background: #fce8e6; color: #c5221f; }
+</style>
+</head>
+<body>
+
+<!-- ======================================================================
+     LEFT COLUMN — main content
+     ====================================================================== -->
+<div class="main-column" id="mainColumn">
+  <div class="main-column-inner">
+
+    <div class="header">
+      <h1>📝 练题</h1>
+      <p>随机选题 · 即时验证</p>
+    </div>
+
+    <!-- start screen -->
+    <div id="startScreen" class="start-card">
+      <p>将从题库中随机抽取最多 <strong>20</strong> 道题目，选项顺序随机打乱。</p>
+      <button class="btn-primary" id="startBtn">开始练习</button>
+    </div>
+
+    <!-- practice area -->
+    <div id="practiceArea" class="hidden">
+      <div id="questionsContainer"></div>
+      <div class="submit-bar">
+        <button class="btn-primary btn-submit" id="submitBtn">提交答案</button>
+        <button class="btn-secondary hidden" id="retryBtn">再来一组</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ======================================================================
+     RIGHT COLUMN — result sidebar (width 0 → 380px on submit)
+     ====================================================================== -->
+<div class="result-sidebar" id="resultSidebar">
+  <div class="sidebar-header">
+    <h2>📊 答题完成</h2>
+    <button class="sidebar-close" id="sidebarCloseBtn">✕</button>
+  </div>
+  <div class="sidebar-body">
+    <div class="stats-grid">
+      <div class="stat-box"><div class="num" id="statTotal">0</div><div class="label">总题数</div></div>
+      <div class="stat-box highlight"><div class="num" id="statCorrect">0</div><div class="label">正确</div></div>
+      <div class="stat-box"><div class="num" id="statRate">0%</div><div class="label">正确率</div></div>
+    </div>
+    <div class="sidebar-section-title">逐题结果</div>
+    <div class="detail-list" id="detailList"></div>
+    <div class="sidebar-actions">
+      <button class="btn-primary" id="sidebarRetryBtn" style="width:100%;">再来一组</button>
+      <button class="btn-secondary" id="sidebarCloseBtn2" style="width:100%;">关闭</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// =========================================================================
+// State
+// =========================================================================
+let questions = [];       // current practice set
+let submitted = false;    // whether answers have been submitted
+
+// =========================================================================
+// DOM refs
+// =========================================================================
+const startScreen      = document.getElementById('startScreen');
+const practiceArea     = document.getElementById('practiceArea');
+const container        = document.getElementById('questionsContainer');
+const submitBtn        = document.getElementById('submitBtn');
+const retryBtn         = document.getElementById('retryBtn');
+const resultSidebar    = document.getElementById('resultSidebar');
+
+// =========================================================================
+// Start
+// =========================================================================
+document.getElementById('startBtn').addEventListener('click', startPractice);
+retryBtn.addEventListener('click', startPractice);
+
+document.getElementById('sidebarRetryBtn').addEventListener('click', closeSidebarAndRetry);
+document.getElementById('sidebarCloseBtn').addEventListener('click', closeSidebar);
+document.getElementById('sidebarCloseBtn2').addEventListener('click', closeSidebar);
+
+function closeSidebar() {
+  resultSidebar.classList.remove('open');
+}
+
+function closeSidebarAndRetry() {
+  closeSidebar();
+  startPractice();
+}
+
+async function startPractice() {
+  submitted = false;
+  submitBtn.textContent = '提交答案';
+  submitBtn.disabled = false;
+  retryBtn.classList.add('hidden');
+  closeSidebar();
+
+  try {
+    const res = await fetch('/api/practice?n=20');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    questions = data.questions;
+    renderQuestions(questions);
+    startScreen.classList.add('hidden');
+    practiceArea.classList.remove('hidden');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch (err) {
+    alert('获取题目失败: ' + err.message);
+  }
+}
+
+// =========================================================================
+// Render
+// =========================================================================
+function renderQuestions(qs) {
+  container.innerHTML = '';
+  qs.forEach((q, idx) => {
+    const isSingle  = q.answer_count === 1;
+    const inputType = isSingle ? 'radio' : 'checkbox';
+    const groupName = `q_${idx}`;
+
+    const card = document.createElement('div');
+    card.className = 'question-card';
+    card.dataset.index = idx;
+
+    const header = document.createElement('div');
+    header.className = 'q-header';
+    header.innerHTML =
+      `<span class="q-number">${idx + 1}</span>` +
+      `<span class="q-stem">${escapeHtml(q.stem)}</span>` +
+      `<span class="tag ${isSingle ? 'tag-single' : 'tag-multi'}">${isSingle ? '单选' : '多选'}</span>`;
+    card.appendChild(header);
+
+    const choicesDiv = document.createElement('div');
+    choicesDiv.className = 'choices';
+
+    q.choices.forEach((choiceText, ci) => {
+      const label = document.createElement('label');
+      label.className = 'choice-label';
+
+      const input = document.createElement('input');
+      input.type  = inputType;
+      input.name  = isSingle ? groupName : `q_${idx}_${ci}`;
+      input.value = q.choice_values[ci];
+      input.dataset.idx = idx;
+
+      const marker = document.createElement('span');
+      marker.className = 'choice-marker';
+
+      const text = document.createElement('span');
+      text.className = 'choice-text';
+      text.textContent = choiceText;
+
+      label.appendChild(input);
+      label.appendChild(marker);
+      label.appendChild(text);
+      choicesDiv.appendChild(label);
+    });
+    card.appendChild(choicesDiv);
+
+    const feedback = document.createElement('div');
+    feedback.className = 'feedback';
+    feedback.id = `fb_${idx}`;
+    card.appendChild(feedback);
+
+    container.appendChild(card);
+  });
+}
+
+// =========================================================================
+// Submit
+// =========================================================================
+submitBtn.addEventListener('click', onSubmit);
+
+async function onSubmit() {
+  if (!questions.length) return;
+
+  if (submitted) {
+    scrollToFirstIncorrect();
+    return;
+  }
+
+  // Gather selected answers
+  const answers = questions.map((q, idx) => {
+    const inputs = container.querySelectorAll(`.choice-label input[data-idx="${idx}"]:checked`);
+    const selected = Array.from(inputs).map(inp => inp.value);
+    return { stem: q.stem, selected };
+  });
+
+  try {
+    submitBtn.disabled = true;
+    submitBtn.textContent = '验证中…';
+
+    const res = await fetch('/api/check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ answers }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    // Per-question feedback
+    data.results.forEach((r, idx) => {
+      const card = container.querySelector(`.question-card[data-index="${idx}"]`);
+      const fb   = document.getElementById(`fb_${idx}`);
+      if (!fb) return;
+
+      card.classList.add(r.correct ? 'correct' : 'incorrect');
+      fb.className = `feedback show ${r.correct ? 'correct' : 'incorrect'}`;
+      fb.innerHTML = r.correct
+        ? '<strong>✓ 正确</strong>'
+        : `<strong>✗ 错误</strong><div class="expected">正确答案：${escapeHtml(r.expected.join('、'))}</div>`;
+    });
+
+    // Open the right sidebar
+    showSidebar(data.stats, data.results);
+
+    submitted = true;
+    submitBtn.textContent = '查看错题';
+    submitBtn.disabled = false;
+    retryBtn.classList.remove('hidden');
+  } catch (err) {
+    alert('提交失败: ' + err.message);
+    submitBtn.disabled = false;
+    submitBtn.textContent = '提交答案';
+  }
+}
+
+function scrollToFirstIncorrect() {
+  const firstBad = container.querySelector('.question-card.incorrect');
+  if (firstBad) firstBad.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// =========================================================================
+// Sidebar
+// =========================================================================
+function showSidebar(stats, results) {
+  document.getElementById('statTotal').textContent   = stats.total;
+  document.getElementById('statCorrect').textContent = stats.correct;
+  document.getElementById('statRate').textContent    = stats.rate + '%';
+
+  const list = document.getElementById('detailList');
+  list.innerHTML = '';
+  results.forEach((r) => {
+    const div = document.createElement('div');
+    div.className = 'detail-item';
+    div.innerHTML =
+      `<span class="icon">${r.correct ? '✅' : '❌'}</span>` +
+      `<span class="q-text">${escapeHtml(r.stem)}</span>`;
+    list.appendChild(div);
+  });
+
+  resultSidebar.classList.add('open');
+}
+
+// =========================================================================
+// Helpers
+// =========================================================================
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+</script>
+</body>
+</html>
