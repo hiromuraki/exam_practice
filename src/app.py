@@ -5,6 +5,7 @@ Reads questions from data/*.json and serves randomized practice sets.
 
 import hashlib
 import json
+import os
 import random
 import string
 from pathlib import Path
@@ -16,7 +17,7 @@ from pydantic import BaseModel
 
 app = FastAPI(title="Exam Practice")
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 # ---------------------------------------------------------------------------
